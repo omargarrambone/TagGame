@@ -10,9 +10,9 @@
 struct FAivState : TSharedFromThis<FAivState>
 {
 private:
-	TFunction<void(AAIController*, UBlackboardComponent*)> Enter;
-	TFunction<void(AAIController*, UBlackboardComponent*)> Exit;
-	TFunction<TSharedPtr<FAivState>(AAIController*, const float, UBlackboardComponent*)> Tick;
+	TFunction<void(AAIController*)> Enter;
+	TFunction<void(AAIController*)> Exit;
+	TFunction<TSharedPtr<FAivState>(AAIController*, const float)> Tick;
 
 public:
 	FAivState()
@@ -22,7 +22,7 @@ public:
 		Tick = nullptr;
 	}
 
-	FAivState(TFunction<void(AAIController*, UBlackboardComponent*)> InEnter = nullptr, TFunction<void(AAIController*, UBlackboardComponent*)> InExit = nullptr, TFunction<TSharedPtr<FAivState>(AAIController*, const float, UBlackboardComponent*)> InTick = nullptr)
+	FAivState(TFunction<void(AAIController*)> InEnter = nullptr, TFunction<void(AAIController*)> InExit = nullptr, TFunction<TSharedPtr<FAivState>(AAIController*, const float)> InTick = nullptr)
 	{
 		Enter = InEnter;
 		Exit = InExit;
@@ -35,30 +35,30 @@ public:
 	FAivState& operator=(FAivState&& Other) = delete;
 
 
-	void CallEnter(AAIController* AIController, UBlackboardComponent* BlackboardComponent)
+	void CallEnter(AAIController* AIController)
 	{
 		if (Enter)
 		{
-			Enter(AIController, BlackboardComponent);
+			Enter(AIController);
 		}
 	}
-	void CallExit(AAIController* AIController, UBlackboardComponent* BlackboardComponent)
+	void CallExit(AAIController* AIController)
 	{
 		if (Exit)
 		{
-			Exit(AIController, BlackboardComponent);
+			Exit(AIController);
 		}
 
 	}
-	TSharedPtr<FAivState> CallTick(AAIController* AIController, const float DeltaTime, UBlackboardComponent* BlackboardComponent)
+	TSharedPtr<FAivState> CallTick(AAIController* AIController, const float DeltaTime)
 	{
 		if (Tick)
 		{
-			TSharedPtr<FAivState> NewState = Tick(AIController, DeltaTime, BlackboardComponent);
+			TSharedPtr<FAivState> NewState = Tick(AIController, DeltaTime);
 			if (NewState != nullptr && NewState != AsShared())
 			{
-				CallExit(AIController, BlackboardComponent);
-				NewState->CallEnter(AIController, BlackboardComponent);
+				CallExit(AIController);
+				NewState->CallEnter(AIController);
 				return NewState;
 			}
 		}
@@ -81,14 +81,14 @@ protected:
 	TSharedPtr<FAivState> SearchForBall;
 	TSharedPtr<FAivState> GoToBall;
 	TSharedPtr<FAivState> GrabBall;
-	TSharedPtr<FAivState> Dead;
+	TSharedPtr<FAivState> Patrol;
 
 	//ABall* BestBall;
 
 	void BeginPlay() override;
 	void Tick(float DeltaTime) override;
 
-	UPROPERTY(EditDefaultsOnly)
+	/*UPROPERTY(EditDefaultsOnly)*/
 		UBlackboardData* BlackBoardData;
 
 	UBlackboardComponent* BlackBoardComponent;

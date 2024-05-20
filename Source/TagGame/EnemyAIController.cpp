@@ -5,6 +5,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "TagGameGameMode.h"
 #include "Ball.h"
+#include "NavigationSystem.h"
 
 
 
@@ -23,13 +24,13 @@ void AEnemyAIController::BeginPlay()
 	Super::BeginPlay();
 
 	GoToPlayer = MakeShared<FAivState>(
-		[](AAIController* AIController, UBlackboardComponent* BlackboardComponent) //Enter
+		[](AAIController* AIController) //Enter
 		{
 			AIController->MoveToActor(AIController->GetWorld()->GetFirstPlayerController()->GetPawn(), 100.0f);
 			
 		},
 		nullptr, //Exit
-		[this](AAIController* AIController, const float DeltaTime, UBlackboardComponent* BlackboardComponent) -> TSharedPtr<FAivState> //Tick
+		[this](AAIController* AIController, const float DeltaTime) -> TSharedPtr<FAivState> //Tick
 		{
 			ABall* BestBall = Cast<ABall>(BlackBoardComponent->GetValueAsObject(TEXT("Bestball")));
 
@@ -45,15 +46,15 @@ void AEnemyAIController::BeginPlay()
 				BestBall->SetActorRelativeLocation(FVector(0, 0, 0));
 				BestBall = nullptr;
 			}
+			return SearchForBall;
 			
 
-			return SearchForBall;
 
 		}
 	);
 
 	SearchForBall = MakeShared<FAivState>(
-		[this](AAIController* AIController, UBlackboardComponent* BlackboardComponent)
+		[this](AAIController* AIController)
 		{
 			AGameModeBase* GameMode = AIController->GetWorld()->GetAuthGameMode();
 			ATagGameGameMode* AIGameMode = Cast<ATagGameGameMode>(GameMode);
@@ -79,7 +80,7 @@ void AEnemyAIController::BeginPlay()
 			ABall* BestBall = Cast<ABall>(BlackBoardComponent->GetValueAsObject(TEXT("Bestball")));
 		},
 		nullptr,
-		[this](AAIController* AIController, const float DeltaTime, UBlackboardComponent* BlackboardComponent) -> TSharedPtr<FAivState> //Tick
+		[this](AAIController* AIController, const float DeltaTime) -> TSharedPtr<FAivState> //Tick
 		{
 			ABall* BestBall = Cast<ABall>(BlackBoardComponent->GetValueAsObject(TEXT("Bestball")));
 
@@ -89,21 +90,21 @@ void AEnemyAIController::BeginPlay()
 			}
 			else
 			{
-				return SearchForBall;
+				return Patrol;
 			}
 
 		}
 	);
 
 	GoToBall = MakeShared<FAivState>(
-		[this](AAIController* AIController, UBlackboardComponent* BlackboardComponent) //Enter
+		[this](AAIController* AIController) //Enter
 		{
 			ABall* BestBall = Cast<ABall>(BlackBoardComponent->GetValueAsObject(TEXT("Bestball")));
 
 			AIController->MoveToActor(BestBall, 100.0f);
 		}, 
 		nullptr, //Exit
-		[this](AAIController* AIController, const float DeltaTime, UBlackboardComponent* BlackboardComponent) -> TSharedPtr<FAivState> //Tick
+		[this](AAIController* AIController, const float DeltaTime) -> TSharedPtr<FAivState> //Tick
 		{
 			EPathFollowingStatus::Type State = AIController->GetMoveStatus();
 
@@ -118,7 +119,7 @@ void AEnemyAIController::BeginPlay()
 		);
 
 	GrabBall = MakeShared<FAivState>(
-		[this](AAIController* AIController, UBlackboardComponent* BlackboardComponent)
+		[this](AAIController* AIController)
 		{
 			ABall* BestBall = Cast<ABall>(BlackBoardComponent->GetValueAsObject(TEXT("Bestball")));
 
@@ -128,7 +129,7 @@ void AEnemyAIController::BeginPlay()
 			}
 		},//Enter
 		nullptr, //Exit
-		[this](AAIController* AIController, const float DeltaTime, UBlackboardComponent* BlackboardComponent) -> TSharedPtr<FAivState> //Tick
+		[this](AAIController* AIController, const float DeltaTime) -> TSharedPtr<FAivState> //Tick
 		{
 			ABall* BestBall = Cast<ABall>(BlackBoardComponent->GetValueAsObject(TEXT("Bestball")));
 
@@ -144,15 +145,60 @@ void AEnemyAIController::BeginPlay()
 		}
 	);
 
-	/*Dead = MakeShared<FAivState>(
-		[](AAIController* AIController)
+	Patrol = MakeShared<FAivState>(
+		[this](AAIController* AIController)
 		{
+			UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(AIController->GetWorld());
+
+			FNavLocation RandomLocation;
+
+			bool CanReachPoint = NavSystem->GetRandomReachablePointInRadius(AIController->GetPawn()->GetActorLocation(), 1000.f, RandomLocation);
+
+			if (CanReachPoint)
+			{
+				if (UseBlackboard(BlackBoardData, BlackBoardComponent))
+				{
+					BlackBoardComponent->SetValueAsVector(TEXT("RandomPoint"), RandomLocation.Location);
+				}
+			}
+
+			AIController->MoveToLocation(BlackBoardComponent->GetValueAsVector(TEXT("RandomPoint")));
+		},
+		nullptr,
+		[this](AAIController* AIController, const float DeltaTime) -> TSharedPtr<FAivState> //Tick
+		{
+			
+			EPathFollowingStatus::Type State = AIController->GetMoveStatus();
+
+			if (State == EPathFollowingStatus::Moving)
+			{
+				return nullptr;
+			}
+			else
+			{
+				UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(AIController->GetWorld());
+
+				FNavLocation RandomLocation;
+
+				bool CanReachPoint = NavSystem->GetRandomReachablePointInRadius(AIController->GetPawn()->GetActorLocation(), 1000.f, RandomLocation);
+
+				if (CanReachPoint)
+				{
+					if (UseBlackboard(BlackBoardData, BlackBoardComponent))
+					{
+						BlackBoardComponent->SetValueAsVector(TEXT("RandomPoint"), RandomLocation.Location);
+					}
+				}
+
+				AIController->MoveToLocation(BlackBoardComponent->GetValueAsVector(TEXT("RandomPoint")));
+				return Patrol;
+			}
 
 		}
-	);*/
+	);
 
 	CurrentState = SearchForBall;
-	CurrentState->CallEnter(this, this->GetBlackboardComponent());
+	CurrentState->CallEnter(this);
 }
 
 void AEnemyAIController::Tick(float DeltaTime)
@@ -161,7 +207,7 @@ void AEnemyAIController::Tick(float DeltaTime)
 
 	if (CurrentState)
 	{
-		CurrentState = CurrentState->CallTick(this, DeltaTime, this->GetBlackboardComponent());
+		CurrentState = CurrentState->CallTick(this, DeltaTime);
 	}
 }
 
