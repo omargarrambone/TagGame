@@ -75,5 +75,5 @@ void ATagGameGameMode::Tick(float DeltaTime)
 		}
 	}
 
-	//ResetMatch();
+	ResetMatch();
 }

@@ -88,9 +88,10 @@ protected:
 	void BeginPlay() override;
 	void Tick(float DeltaTime) override;
 
-	/*UPROPERTY(EditDefaultsOnly)*/
-		UBlackboardData* BlackBoardData;
+	UPROPERTY()
+	UBlackboardData* BlackBoardData;
 
+	UPROPERTY()
 	UBlackboardComponent* BlackBoardComponent;
 public:
 	AEnemyAIController();
